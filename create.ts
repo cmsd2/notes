@@ -1,28 +1,8 @@
-import uuid from 'uuid';
-import * as AWS from 'aws-sdk';
+import * as d from './libs/dynamodb';
+import { success, failure } from './libs/response';
+import { Item } from './libs/item';
 
-AWS.config.update({ region: 'us-east-1' });
-const dynamoDb = new AWS.DynamoDB.DocumentClient();
-
-class Item {
-    userId: string;
-    noteId: string;
-    content: any;
-    attachment: any;
-    static noteIdSeparator = '_';
-
-    constructor() {
-        const now = new Date();
-        this.noteId = now.toISOString() + Item.noteIdSeparator + uuid.v4();
-    }
-
-    createdAt(): Date {
-        const parts = this.noteId.split(Item.noteIdSeparator);
-        return new Date(parts[0])
-    }
-}
-
-export function main(event, context, callback) {
+export async function main(event, context, callback) {
     const data = JSON.parse(event.body);
 
     var item = new Item();
@@ -35,31 +15,11 @@ export function main(event, context, callback) {
         Item: item
     }
 
-    dynamoDb.put(params, (error, data) => {
-        const headers = {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": true
-        };
- 
-            
-        if (error) {
-            const response = {
-                statusCode: 500,
-                headers: headers,
-                body: JSON.stringify({status: false})
-            };
-
-            callback(null, response);
-
-            return;
-        }
-
-        const response = {
-            statusCode: 200,
-            headers: headers,
-            body: JSON.stringify(item)
-        };
-
-        callback(null, response);
-    });
+    try {
+      await d.call('put', params);
+      callback(null, success(item));
+    } catch (e) {
+      console.log(e);
+      callback(null, failure({status: false}));
+    }
 }
