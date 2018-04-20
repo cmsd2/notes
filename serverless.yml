@@ -51,6 +51,9 @@ provider:
 #    - exclude-me.js
 #    - exclude-me-dir/**
 
+plugins:
+  - serverless-plugin-typescript
+  
 functions:
   hello:
     handler: handler.hello
