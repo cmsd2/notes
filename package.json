@@ -11,5 +11,8 @@
   "devDependencies": {
     "@types/node": "^9.6.6",
     "serverless-plugin-typescript": "^1.1.5"
+  },
+  "dependencies": {
+    "uuid": "^3.2.1"
   }
 }
