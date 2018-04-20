@@ -24,6 +24,18 @@ provider:
 
 # you can add statements to the Lambda function's IAM Role here
   iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:DescribeTable
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "arn:aws:dynamodb:us-east-1:*:table/${env:TABLE_NAME}"
+
 #    - Effect: "Allow"
 #      Action:
 #        - "s3:ListBucket"
@@ -53,18 +65,20 @@ provider:
 
 plugins:
   - serverless-plugin-typescript
-  
+
 functions:
   hello:
-    handler: handler.hello
+    handler: create.main
 
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
 #    Check the event documentation for details
     events:
       - http:
-          path: hello
-          method: get
+          path: notes
+          method: post
+          cors: true
+          authorizer: aws_iam
 #      - s3: ${env:BUCKET}
 #      - schedule: rate(10 minutes)
 #      - sns: greeter-topic
@@ -112,7 +126,7 @@ resources:
           WriteCapacityUnits: 1
         SSESpecification:
           SSEEnabled: true
-        TableName: notes
+        TableName: ${env:TABLE_NAME}
         Tags:
           - Key: Application
             Value: notes
