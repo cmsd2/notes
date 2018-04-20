@@ -10,6 +10,7 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^9.6.6",
+    "aws-sdk": "^2.226.1",
     "serverless-plugin-typescript": "^1.1.5"
   },
   "dependencies": {
