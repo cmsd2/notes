@@ -1,12 +1,25 @@
 import * as d from './dynamodb';
 import { Item } from './item';
+import * as auth from './auth';
+
+export async function create(item: Item): Promise<Item> {
+    const params = {
+        TableName: d.table_name(), 
+        Item: item
+    }
+
+    await d.call('put', params);
+
+    return item;
+}
 
 export async function get(event) {
+    console.log(event.pathParameters);
     const params = {
-        TableName: 'notes',
+        TableName: d.table_name(),
         Key: {
-            userId: event.requestContext.identity.cognitoIdentityId,
-            noteId: event.pathParameters.id
+            userId: auth.user_id(event),
+            noteId: decodeURIComponent(event.pathParameters.id)
         }
     };
 
@@ -19,13 +32,14 @@ export async function get(event) {
 }
 
 export async function update(item: Item, event: any) {
+    console.log(event.pathParameters);
     const data = JSON.parse(event.body);
 
     const params = {
-        TableName: 'notes',
+        TableName: d.table_name(),
         Key: {
-            userId: event.requestContext.identity.cognitoIdentityId,
-            noteId: event.pathParameters.id
+            userId: auth.user_id(event),
+            noteId: decodeURIComponent(event.pathParameters.id)
         },
         UpdateExpression: "SET content = :content, attachment = :attachment",
         ExpressionAttributeValues: {
@@ -40,10 +54,10 @@ export async function update(item: Item, event: any) {
 
 export async function list(event) {
     const params = {
-        TableName:  'notes',
+        TableName:  d.table_name(),
         KeyConditionExpression: "userId = :userId",
         ExpressionAttributeValues: {
-            ":userId": event.requestContext.identity.cognitoIdentityId
+            ":userId": auth.user_id(event)
         }
     };
 
@@ -53,7 +67,7 @@ export async function list(event) {
 
 export async function deleteItem(item: Item) {
     const params = {
-        TableName: 'notes',
+        TableName: d.table_name(),
         Key: {
             userId: item.userId,
             noteId: item.noteId

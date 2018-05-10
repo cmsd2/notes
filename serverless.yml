@@ -21,6 +21,8 @@ provider:
   name: aws
   runtime: nodejs6.10
   region: us-east-1
+  environment:
+    TABLE_NAME: "${env:${self:provider.stage}_TABLE_NAME}"
 
 # you can add statements to the Lambda function's IAM Role here
   iamRoleStatements:
@@ -34,7 +36,7 @@ provider:
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
       Resource:
-        - "arn:aws:dynamodb:us-east-1:*:table/${env:TABLE_NAME}"
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/${env:${self:provider.stage}_TABLE_NAME}"
 
 #    - Effect: "Allow"
 #      Action:
@@ -65,6 +67,13 @@ provider:
 
 plugins:
   - serverless-plugin-typescript
+  - serverless-plugin-stage-variables
+  - serverless-s3bucket-sync
+
+custom:
+  s3-sync:
+    - folder: wwwroot
+      bucket: "${env:${self:provider.stage}_SITE_BUCKET}"
 
 functions:
   list:
@@ -74,8 +83,8 @@ functions:
           path: notes
           method: get
           cors: true
-          authorizer: aws_iam
-
+          authorizer:
+            arn: ${env:${self:provider.stage}_COGNITO_USER_POOL_ARN}
   get:
     handler: get.main
     events:
@@ -83,27 +92,26 @@ functions:
           path: notes/{id}
           method: get
           cors: true
-          authorizer: aws_iam
+          authorizer:
+            arn: ${env:${self:provider.stage}_COGNITO_USER_POOL_ARN}
   create:
     handler: create.main
-
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
     events:
       - http:
           path: notes
           method: post
           cors: true
-          authorizer: aws_iam
+          authorizer:
+            arn: ${env:${self:provider.stage}_COGNITO_USER_POOL_ARN}
   update:
     handler: update.main
     events:
       - http:
           path: notes/{id}
-          method: put 
+          method: put
           cors: true
-          authorizer: aws_iam
+          authorizer:
+            arn: ${env:${self:provider.stage}_COGNITO_USER_POOL_ARN}
   delete:
     handler: delete.main
     events:
@@ -111,7 +119,8 @@ functions:
           path: notes/{id}
           method: delete
           cors: true
-          authorizer: aws_iam
+          authorizer:
+            arn: ${env:${self:provider.stage}_COGNITO_USER_POOL_ARN}
 
 #      - s3: ${env:BUCKET}
 #      - schedule: rate(10 minutes)
@@ -142,6 +151,63 @@ functions:
 # you can add CloudFormation resource templates here
 resources:
   Resources:
+    ApiIpv4RecordSet:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        AliasTarget:
+          DNSName:
+            Fn::GetAtt:
+              - ApiCloudFront
+              - DomainName
+          HostedZoneId: Z2FDTNDATAQYW2
+        HostedZoneId: "${env:${self:provider.stage}_ZONE_ID}"
+        Name: "${env:${self:provider.stage}_API_DOMAIN}"
+        Type: A
+    ApiIpv6RecordSet:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        AliasTarget:
+          DNSName:
+            Fn::GetAtt:
+              - ApiCloudFront
+              - DomainName
+          HostedZoneId: Z2FDTNDATAQYW2
+        HostedZoneId: "${env:${self:provider.stage}_ZONE_ID}"
+        Name: "${env:${self:provider.stage}_API_DOMAIN}"
+        Type: AAAA
+    SiteIpv4RecordSet:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        AliasTarget:
+          DNSName:
+            Fn::GetAtt:
+              - CloudFront
+              - DomainName
+          HostedZoneId: Z2FDTNDATAQYW2
+        HostedZoneId: "${env:${self:provider.stage}_ZONE_ID}"
+        Name: "${env:${self:provider.stage}_DOMAIN}"
+        Type: A
+    SiteIpv6RecordSet:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        AliasTarget:
+          DNSName:
+            Fn::GetAtt:
+              - CloudFront
+              - DomainName
+          HostedZoneId: Z2FDTNDATAQYW2
+        HostedZoneId: "${env:${self:provider.stage}_ZONE_ID}"
+        Name: "${env:${self:provider.stage}_DOMAIN}"
+        Type: AAAA
+    ApiGatewayStage:
+      Type: AWS::ApiGateway::Stage
+      Properties:
+        MethodSettings:
+          - DataTraceEnabled: true
+            HttpMethod: "*"
+            LoggingLevel: INFO
+            ResourcePath: "/*"
+            MetricsEnabled: true
     NotesTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -160,7 +226,7 @@ resources:
           WriteCapacityUnits: 1
         SSESpecification:
           SSEEnabled: true
-        TableName: ${env:TABLE_NAME}
+        TableName: "${env:${self:provider.stage}_TABLE_NAME}"
         Tags:
           - Key: Application
             Value: notes
@@ -192,15 +258,165 @@ resources:
               AbortIncompleteMultipartUpload:
                 DaysAfterInitiation: 1
         LoggingConfiguration: 
-          DestinationBucketName: ${env:LOGS_BUCKET}
-          LogFilePrefix: "om-notes-uploads/"
+          DestinationBucketName: "${env:LOGS_BUCKET}"
+          LogFilePrefix: "om-notes-uploads/${self:provider.stage}/"
         Tags:
           - Key: Application
             Value: notes
-    # UserPool:
-    #   Type: AWS::Cognito::UserPool
-    #   Properties:
-
+    CloudFront:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Aliases:
+            - "${env:${self:provider.stage}_DOMAIN}"
+          CustomErrorResponses:
+            - ErrorCachingMinTTL: 60
+              ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+          DefaultCacheBehavior:
+            Compress: true
+            DefaultTTL: 300
+            ForwardedValues:
+              QueryString: false
+            TargetOriginId: S3
+            ViewerProtocolPolicy: redirect-to-https
+          DefaultRootObject: index.html
+          Enabled: true
+          IPV6Enabled: true
+          Logging:
+            Bucket: "${env:LOGS_BUCKET}.s3.amazonaws.com"
+            Prefix: "om-notes-site/${self:provider.stage}"
+          Origins:
+            - Id: "S3"
+              DomainName:
+                Fn::GetAtt:
+                  - SiteBucket
+                  - DomainName
+              S3OriginConfig:
+                OriginAccessIdentity:
+                  Fn::Join:
+                    - "/"
+                    -
+                      - origin-access-identity
+                      - cloudfront
+                      - Ref:
+                          OriginAccessIdentity
+          PriceClass: PriceClass_100
+          Restrictions:
+            GeoRestriction:
+              RestrictionType: none
+          ViewerCertificate:
+            AcmCertificateArn: "${env:${self:provider.stage}_ACM_ARN}"
+            SslSupportMethod: sni-only
+          # WebACLId:
+        Tags:
+          - Key: Application
+            Value: notes
+    ApiCloudFront:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Aliases:
+            - "${env:${self:provider.stage}_API_DOMAIN}"
+          DefaultCacheBehavior:
+            AllowedMethods:
+              - "DELETE"
+              - "GET"
+              - "HEAD"
+              - "OPTIONS"
+              - "PATCH"
+              - "POST"
+              - "PUT"
+            CachedMethods:
+              - "HEAD"
+              - "GET"
+            Compress: false
+            DefaultTTL: 3600
+            ForwardedValues:
+              Headers:
+                - Authorization
+              QueryString: true
+              QueryStringCacheKeys:
+                - "q"
+            MinTTL: 60
+            TargetOriginId: Api
+            ViewerProtocolPolicy: redirect-to-https
+          DefaultRootObject: index.html
+          Enabled: true
+          IPV6Enabled: true
+          Logging:
+            Bucket: "${env:LOGS_BUCKET}.s3.amazonaws.com"
+            Prefix: "om-notes-api/${self:provider.stage}"
+          Origins:
+            - Id: Api
+              CustomOriginConfig:
+                OriginProtocolPolicy: https-only
+              DomainName:
+                Fn::Join:
+                  - ""
+                  -
+                    - Ref:
+                        ApiGatewayRestApi
+                    - ".execute-api.${self:provider.region}.amazonaws.com"
+              OriginPath: "/${self:provider.stage}"
+          PriceClass: PriceClass_100
+          Restrictions:
+            GeoRestriction:
+              RestrictionType: none
+          ViewerCertificate:
+            AcmCertificateArn: "${env:${self:provider.stage}_ACM_ARN}"
+            SslSupportMethod: sni-only
+          # WebACLId:
+        Tags:
+          - Key: Application
+            Value: notes
+    OriginAccessIdentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: "om-notes-${self:provider.stage} origin access identity"
+    SiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        AccessControl: BucketOwnerFullControl
+        BucketName: "${env:${self:provider.stage}_SITE_BUCKET}"
+        LifecycleConfiguration:
+          Rules:
+            - Id: "Remove old versions"
+              Status: Enabled
+              NoncurrentVersionExpirationInDays: 30
+        LoggingConfiguration:
+          DestinationBucketName: "${env:LOGS_BUCKET}"
+          LogFilePrefix: "om-notes-site-s3/${self:provider.stage}/"
+        MetricsConfigurations:
+          - Id: metrics
+        VersioningConfiguration:
+          Status: Enabled
+    SiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: SiteBucket
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                CanonicalUser:
+                  Fn::GetAtt:
+                    - OriginAccessIdentity
+                    - S3CanonicalUserId
+              Action:
+                - "s3:GetObject"
+              Resource:
+                - Fn::Join:
+                  - "/"
+                  -
+                    - Fn::GetAtt:
+                      - SiteBucket
+                      - Arn
+                    - "*"
+              
   Outputs:
     Table:
       Description: "Name of the notes DynamoDB table"
