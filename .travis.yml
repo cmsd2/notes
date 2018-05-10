@@ -1,0 +1,21 @@
+language: node_js
+node_js:
+  - "6.10"
+
+cache:
+  yarn: true
+  directories:
+    - node_modules
+
+install:
+  - yarn install
+
+before_deploy:
+  - npm install -g serverless
+
+deploy:
+  provider: script
+  script: serverless deploy
+  on:
+    branch: master
+
