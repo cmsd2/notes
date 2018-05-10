@@ -19,6 +19,7 @@ before_deploy:
 deploy:
   provider: script
   script: serverless deploy
+  skip_cleanup: true
   on:
     branch: master
 
