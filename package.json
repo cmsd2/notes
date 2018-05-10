@@ -4,7 +4,7 @@
   "description": "",
   "main": "handler.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "author": "Chris Dawes <cmsd2@cantab.net>",
   "license": "Apache-2.0",
@@ -13,9 +13,20 @@
     "aws-sdk": "^2.226.1",
     "serverless-plugin-stage-variables": "^1.7.10",
     "serverless-plugin-typescript": "^1.1.5",
-    "serverless-s3bucket-sync": "^0.1.5"
+    "serverless-s3bucket-sync": "^0.1.5",
+    "ts-jest": "^22.4.5"
   },
   "dependencies": {
     "uuid": "^3.2.1"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "js"
+    ],
+    "transform": {
+      "\\.(ts|js)$": "<rootDir>/node_modules/ts-jest/preprocessor.js"
+    },
+    "testRegex": "/__tests__/.*\\.(ts|js)$"
   }
 }
