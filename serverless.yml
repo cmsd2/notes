@@ -393,6 +393,17 @@ resources:
           - Id: metrics
         VersioningConfiguration:
           Status: Enabled
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - Authorization
+                - Content-Length
+              AllowedMethods:
+                - GET
+                - HEAD
+              AllowedOrigins:
+                - "*"
+              MaxAge: 600
     SiteBucketPolicy:
       Type: AWS::S3::BucketPolicy
       Properties:
